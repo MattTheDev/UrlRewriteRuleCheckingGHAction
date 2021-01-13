@@ -1,0 +1,45 @@
+name: URLRewriteValidator
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  url_rule_checker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@01aecccf739ca6ff86c0539fbc67a7a5007bbc81
+
+      - name: Install xmlstarlet
+        run: sudo apt-get install xmlstarlet
+
+      - name: Query against Web.config
+        id: url_rule_checker
+        run: |
+          # Grant perms
+          chmod +x "${GITHUB_WORKSPACE}/.github/workflows/script.sh"
+
+          # Run Script
+          "${GITHUB_WORKSPACE}/.github/workflows/script.sh"
+
+      - name: Get Errors
+        run: echo "Errors in \n ${{ steps.url_rule_checker.outputs.ERROR_LINES }}"
+
+      - name: Format comment for PR
+        id: format_comment
+        if: steps.url_rule_checker.outputs.ERROR_LINES
+        run: |
+          COMMENT_BODY=`echo "${{ steps.url_rule_checker.outputs.ERROR_LINES }}" | sed 's/*/\\\*/g;s/;/<\/li><li>/g'`
+          COMMENT_BODY="There are URL rewrite URLs that dont start/end with ^ and $.  Verify that the URL rules are what you expect.<br /><ul><li>${COMMENT_BODY}</li></ul>"
+          echo "::set-output name=formatted_comment::$COMMENT_BODY"
+          echo "$COMMENT_BODY" | sed 's/*/\\\*/g;s/;/<\/li><li>/g'
+      
+      - uses: mshick/add-pr-comment@5cd99bf9c186219af43341076f1fe9c09e5a9934 # v1
+        if: steps.url_rule_checker.outputs.ERROR_LINES
+        with:
+          message: ${{ steps.format_comment.outputs.formatted_comment }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token-user-login: 'github-actions[bot]'
+          allow-repeats: false
